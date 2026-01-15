@@ -1,0 +1,22 @@
+# Python junk
+__pycache__/
+*.pyc
+.venv/
+.env/
+
+# Git
+.git/
+.gitignore
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# IDE garbage
+.vSCode/
+.idea/
+.DS_Store
+dita_package_processor.egg-info/
+.pytest_cache/
+site/
