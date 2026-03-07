@@ -1,126 +1,266 @@
-# Tree Generator Utility
+# progress-tree
 
-This script generates an ASCII tree representation of a project directory, writes it to a timestamped text file, and appends a summary report including file counts and total lines of code.
+An ASCII directory tree generator with project metrics.
+
+Recursively walks a filesystem, builds a clean ASCII tree, collects
+file/directory/line-count metrics, and writes a timestamped report.
 
 It exists to answer three questions quickly and reliably:
- 1.	What is actually in this project?
- 2.	How big is it?
- 3.	What should be ignored so I don't waste time on noise?
 
-It is intentionally boring.
+1. What is actually in this project?
+2. How big is it?
+3. What should be ignored so I do not waste time on noise?
 
-What It Does
+---
 
-Given a root directory, the script:
- - Recursively walks the filesystem
- - Builds a clean ASCII tree
- - Skips ignored files and directories (like .gitignore)
- - 	Writes output to a timestamped text file in the working repo
- - Produces:
-	- Project tree
-	- File and directory counts
-	- Total lines of code
-	- Basic size estimation
+## Features
 
-## Why This Exists
+- Recursive ASCII directory tree with box-drawing characters
+- File count, directory count, and total lines-of-code metrics
+- Gitignore-style ignore patterns via `tree_ignore.txt`
+- Symlink-safe (symlinks are silently skipped)
+- Live progress heartbeat every N files (configurable)
+- Full CLI with `--help`, logging, custom input/output paths
+- Zero runtime dependencies (stdlib only)
+- Full unit-test suite (pytest)
 
-Every real project eventually reaches the point where:
- - ls -R is unreadable
- - 	IDE trees lie by omission
- - Humans forget what they've built
- - AI forgets what is has built forget what it has built
+---
 
-This script gives you:
- - A snapshot of reality
- - A permanent artifact you can version
- - Something you can paste into documentation or ChatGPT without guesswork
+## Installation
 
+```bash
+# Clone and install in editable mode
+git clone https://github.com/your-org/python-progress-tree.git
+cd python-progress-tree
+pip install -e ".[dev]"
+```
+
+After installation the `progress-tree` command is available on your PATH.
+
+---
+
+## Quick Start
+
+```bash
+# Scan the current directory, write a timestamped report file
+progress-tree
+
+# Scan a specific directory and print to stdout
+progress-tree --root ~/projects/my-app --stdout
+
+# Skip line counting for a faster pass on a large repo
+progress-tree --no-lines
+
+# Use a custom ignore file and log at DEBUG level
+progress-tree --ignore-file .treeignore --log-level DEBUG
+
+# Write the report to a specific file, suppress the summary banner
+progress-tree --output /tmp/tree_report.txt --quiet
+```
+
+---
+
+## CLI Reference
+
+```
+usage: progress-tree [-h] [--version] [--root DIR] [--output FILE]
+                     [--ignore-file FILE] [--no-lines]
+                     [--progress-interval N] [--stdout] [--quiet]
+                     [--log-level LEVEL] [--log-file FILE]
+
+Generate an ASCII directory tree with project metrics and write a
+timestamped report.
+
+input / output:
+  --root DIR, -r DIR       Root directory to scan. Defaults to cwd.
+  --output FILE, -o FILE   Path for the report file. Defaults to
+                           project_tree_<timestamp>.txt in the root.
+  --ignore-file FILE, -i FILE
+                           Path to the ignore-patterns file (gitignore
+                           style). Defaults to <root>/tree_ignore.txt.
+
+scan behaviour:
+  --no-lines               Skip line counting. Faster for very large repos.
+  --progress-interval N    Print a progress update every N files.
+                           Set to 0 to silence. (default: 200)
+
+output mode:
+  --stdout                 Print the report to stdout instead of a file.
+  --quiet, -q              Suppress the summary banner.
+
+logging:
+  --log-level LEVEL, -l LEVEL
+                           One of DEBUG | INFO | WARNING | ERROR | CRITICAL.
+                           (default: WARNING)
+  --log-file FILE          Write log output to FILE instead of stderr.
+```
+
+---
+
+## Ignore File
+
+Place a `tree_ignore.txt` file in the root you are scanning (or point to one
+with `--ignore-file`).  Syntax is a subset of gitignore:
+
+```text
+# Python artefacts
+__pycache__/
+*.pyc
+
+# Version control
+.git/
+
+# Virtual environments
+.venv/
+venv/
+
+# Build output
+dist/
+build/
+*.egg-info/
+
+# IDE files
+.vscode/
+.idea/
+.DS_Store
+```
+
+Rules evaluated in order:
+
+| Rule | Example | Matches |
+|------|---------|---------|
+| Directory prefix (`/` suffix) | `.git/` | Any path starting with `.git` |
+| Full-path glob | `src/*.pyc` | Glob over the full relative path |
+| Name-only glob | `*.log` | Glob over the bare file/dir name |
+
+---
 
 ## Output Example
 
-The generated file will look roughly like:
+```
+Project Tree Report
+Generated : 2026-03-06T14:22:10
+Root      : /Users/matt/projects/my-app
 
-```txt
-Project Tree:
-├── src
-│   ├── main.py
-│   └── utils.py
+ASCII TREE
+============================================================
+my-app
+├── progress_tree
+│   ├── __init__.py
+│   ├── cli.py
+│   ├── ignore.py
+│   ├── models.py
+│   ├── reporter.py
+│   └── scanner.py
 ├── tests
-│   └── test_main.py
-└── pyproject.toml
+│   ├── __init__.py
+│   ├── test_cli.py
+│   ├── test_ignore.py
+│   ├── test_models.py
+│   ├── test_reporter.py
+│   └── test_scanner.py
+├── pyproject.toml
+├── README.md
+└── tree_ignore.txt
 
-Summary:
-Directories: 12
-Files: 84
-Python files: 37
-Total lines of code: 9,214
-Generated: 2026-01-10 21:34:55
+PROJECT METRICS
+============================================================
+Directories   : 2
+Files         : 14
+Lines of code : 1,842
+Scan time     : 0.04s
+
+INTERPRETATION
+============================================================
+This is a structural snapshot of your repository...
 ```
 
-The exact format depends on configuration, but the structure is stable.
+---
 
+## Python API
 
-Ignore System
+The package can also be used programmatically:
 
-The script supports a tree_ignore.txt file in the project root.
+```python
+from pathlib import Path
+from progress_tree import TreeScanner, ReportBuilder
+from progress_tree.ignore import load_ignore_strategy
 
-This behaves like .gitignore.
+strategy = load_ignore_strategy(Path("tree_ignore.txt"))
 
-Example:
+scanner = TreeScanner(
+    root=Path("."),
+    ignore_strategy=strategy,
+    progress_interval=500,
+    count_lines=True,
+)
 
-```txt
-.venv
-__pycache__
-node_modules
-.site
-.pytest_cache
-*.log
+result = scanner.scan()
+
+report = (
+    ReportBuilder()
+    .set_header(result.root)
+    .set_tree(result.tree_lines, root_label=result.root.name)
+    .set_metrics(result.metrics)
+    .set_interpretation()
+    .build()
+)
+
+print(report)
+print(f"Scanned {result.metrics.file_count} files in {result.metrics.elapsed:.2f}s")
 ```
 
-Anything matching these patterns is skipped.
+---
 
-This keeps the tree meaningful instead of polluted.
+## Running Tests
 
+```bash
+# Run all tests
+pytest
 
-## Usage
+# Run with coverage
+pytest --cov=progress_tree --cov-report=term-missing
 
-From the project root:
+# Run a specific test file
+pytest tests/test_scanner.py -v
+```
 
-python tree.py
+---
 
-By default it:
- - Scans the current directory
- - Reads tree_ignore.txt if present
- - Writes output to something like: `project_tree_2026-01-10_21-34-55.txt`
+## Project Structure
 
-You can safely commit this file or delete it. It has no side effects.
+```
+python-progress-tree/
+├── progress_tree/
+│   ├── __init__.py      Package entry point and public API
+│   ├── cli.py           Argparse CLI (progress-tree command)
+│   ├── ignore.py        Strategy pattern: ignore-rule matching
+│   ├── models.py        ScanMetrics and ScanResult dataclasses
+│   ├── reporter.py      Builder pattern: report assembly
+│   └── scanner.py       TreeScanner: recursive filesystem walk
+├── tests/
+│   ├── test_cli.py
+│   ├── test_ignore.py
+│   ├── test_models.py
+│   ├── test_reporter.py
+│   └── test_scanner.py
+├── tree_ignore.txt      Default ignore patterns
+├── pyproject.toml
+├── DESIGN.md
+└── README.md
+```
 
-## Design Constraints
+---
 
-This script is intentionally:
- - Single-file
- - Zero dependencies
- - Deterministic
- - Safe to run on large repositories
- - Resistant to infinite loops and symlinks
- - Predictable in output
+## Design
 
-It is not meant to be clever.
-It is meant to be trusted.
+See [DESIGN.md](DESIGN.md) for a description of the architecture, design
+patterns applied, and key decisions.
 
-
-Intended Use Cases
- - Project onboarding
- - 	Architectural documentation
- - ChatGPT context sharing
- - Codebase audits
- - Sanity checks before refactors
- - Capturing historical snapshots
-
+---
 
 ## Philosophy
 
-This script is infrastructure for thinking.
+This tool is infrastructure for thinking.
 
-It doesn't help you code.
-It helps you understand what you already built.
+It does not help you code.  It helps you understand what you already built.
